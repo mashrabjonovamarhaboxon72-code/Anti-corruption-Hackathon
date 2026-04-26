@@ -8,4 +8,5 @@ import os
 
 os.environ.setdefault("PT_SALT", "test-salt-please-rotate")
 os.environ.setdefault("PROTECTION_ORDER_SIGNING_KEY", "test-protection-key-please-rotate")
+os.environ.setdefault("RECOVERY_SALT", "test-recovery-salt-please-rotate")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")

@@ -26,6 +26,7 @@ def init_db():
         evidence,
         protection_order,
         report,
+        session,
         user,
         voucher,
     )

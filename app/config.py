@@ -25,6 +25,16 @@ if not PROTECTION_ORDER_SIGNING_KEY:
         "compromise of one secret from invalidating the other."
     )
 
+RECOVERY_SALT = os.environ.get("RECOVERY_SALT")
+if not RECOVERY_SALT:
+    raise RuntimeError(
+        "RECOVERY_SALT environment variable is required. "
+        "Use a different value than PT_SALT and PROTECTION_ORDER_SIGNING_KEY — "
+        "key separation prevents one compromise from collapsing the others."
+    )
+
+SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
+
 DUPLICATE_SIMILARITY_THRESHOLD = float(os.getenv("DUPLICATE_SIMILARITY_THRESHOLD", "0.88"))
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
 
