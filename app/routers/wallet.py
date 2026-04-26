@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.voucher import Voucher
+from app.routers.deps import get_current_pt
 from app.services.badges import compute_badges
 from app.services.benefits_catalog import benefits_for_tier, find_benefit
 from app.services.wallet import issue_voucher, self_destruct_transaction
@@ -20,10 +21,13 @@ class RewardsResponse(BaseModel):
 
 
 @router.get("/rewards", response_model=RewardsResponse)
-def list_rewards(pseudonymous_token: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.pseudonymous_token == pseudonymous_token).one_or_none()
+def list_rewards(
+    pt: str = Depends(get_current_pt),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.pseudonymous_token == pt).one_or_none()
     if user is None:
-        raise HTTPException(status_code=404, detail="Unknown pseudonymous_token.")
+        raise HTTPException(status_code=404, detail="Session is valid but user record is missing.")
     return RewardsResponse(
         age_tier=user.age_tier,
         points_total=user.points_total,
@@ -33,7 +37,6 @@ def list_rewards(pseudonymous_token: str, db: Session = Depends(get_db)):
 
 
 class RedeemRequest(BaseModel):
-    pseudonymous_token: str = Field(..., min_length=64, max_length=64)
     benefit_id: str
 
 
@@ -45,10 +48,14 @@ class RedeemResponse(BaseModel):
 
 
 @router.post("/redeem", response_model=RedeemResponse, status_code=status.HTTP_201_CREATED)
-def redeem(payload: RedeemRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.pseudonymous_token == payload.pseudonymous_token).one_or_none()
+def redeem(
+    payload: RedeemRequest,
+    pt: str = Depends(get_current_pt),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.pseudonymous_token == pt).one_or_none()
     if user is None:
-        raise HTTPException(status_code=404, detail="Unknown pseudonymous_token.")
+        raise HTTPException(status_code=404, detail="Session is valid but user record is missing.")
 
     benefit = find_benefit(payload.benefit_id)
     if benefit is None:
@@ -59,7 +66,7 @@ def redeem(payload: RedeemRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=402, detail="Insufficient points.")
 
     user.points_total -= benefit["points_cost"]
-    voucher = issue_voucher(db, pseudonymous_token=payload.pseudonymous_token, benefit=benefit)
+    voucher = issue_voucher(db, pseudonymous_token=pt, benefit=benefit)
     db.commit()
     db.refresh(user)
 

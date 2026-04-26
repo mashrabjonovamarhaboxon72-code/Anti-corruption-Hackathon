@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.report import Report
 from app.models.user import User
+from app.routers.deps import get_current_pt
 from app.services.duplicate_check import check_for_duplicate
 from app.services.evidence_integrity import verify_evidence_integrity
 from app.services.priority import evaluate_priority
@@ -14,7 +15,6 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 class ReportRequest(BaseModel):
-    pseudonymous_token: str = Field(..., min_length=64, max_length=64)
     text: str = Field(..., min_length=10)
     tier: int = Field(..., ge=1, le=4)
     evidence_path: str | None = None
@@ -34,13 +34,17 @@ class ReportResponse(BaseModel):
 
 
 @router.post("", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
-def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
+def submit_report(
+    payload: ReportRequest,
+    pt: str = Depends(get_current_pt),
+    db: Session = Depends(get_db),
+):
     if payload.tier not in CORRUPTION_TIERS:
         raise HTTPException(status_code=400, detail=f"tier must be one of {sorted(CORRUPTION_TIERS)}")
 
-    user = db.query(User).filter(User.pseudonymous_token == payload.pseudonymous_token).one_or_none()
+    user = db.query(User).filter(User.pseudonymous_token == pt).one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="Unknown pseudonymous_token. Register first.")
+        raise HTTPException(status_code=404, detail="Session is valid but user record is missing.")
 
     dup = check_for_duplicate(db, payload.text)
 
