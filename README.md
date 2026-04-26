@@ -578,7 +578,7 @@ The first time you submit a report, the duplicate-check service lazy-loads the c
 .venv/bin/python -c "from app.services.embeddings import embed; embed('warmup')"
 ```
 
-### Deploy to Render (one-click)
+### Backend deployment — Render (one-click)
 
 The repo ships with a [`render.yaml`](./render.yaml) Blueprint that provisions:
 
@@ -599,6 +599,47 @@ Free tier caveats:
 - Web services spin down after 15 min idle and cold-start in ~30 s. Upgrade to `starter` ($7/mo) for always-on.
 - Free Postgres expires after 90 days and is deleted; bump to a paid plan before the deadline.
 - The default embedder fits in 512 MB RAM. Switch back to `all-mpnet-base-v2` (~420 MB) only if you upgrade to `starter` or higher.
+
+### Frontend deployment — Vercel
+
+The dashboard at [`web/`](./web) ships with a [`vercel.json`](./web/vercel.json) that pins the Next.js framework, build/install commands, and security headers. To deploy:
+
+1. Vercel → **Add New** → **Project** → import `MazadiaS/integrity-shield`
+2. **Set Root Directory to `web`** (Vercel will detect Next.js automatically once it's pointed there). Vercel does not read this from `vercel.json`; it must be set in the project settings.
+3. Add one environment variable in the Vercel dashboard:
+
+   | Name | Value | Scope |
+   |---|---|---|
+   | `NEXT_PUBLIC_API_URL` | `https://integrity-shield-api.onrender.com` (your Render service URL) | Production, Preview, Development |
+
+4. Deploy. ~90 second build.
+
+#### The two-way CORS handshake
+
+The frontend and backend each need to know about the other. After both are deployed, run **once**:
+
+```
+Render dashboard → integrity-shield-api → Environment
+  set FRONTEND_URL = https://integrity-shield.vercel.app
+                     ↑ your Vercel project URL
+```
+
+After that one update, the backend allows browser requests from the frontend, and the frontend talks to the backend. Both sides redeploy automatically.
+
+```
+       ┌─────────────────────────┐                       ┌──────────────────────────┐
+       │ Vercel (Next.js)        │                       │ Render (FastAPI)         │
+       │ env: NEXT_PUBLIC_API_URL│ ──── browser fetch ──▶│ env: FRONTEND_URL        │
+       │      = Render URL       │                       │      = Vercel URL        │
+       │                         │ ◀── CORS allow_origin │                          │
+       └─────────────────────────┘                       └──────────────────────────┘
+```
+
+#### Things to know
+
+- `NEXT_PUBLIC_*` env vars are **baked into the JS bundle at build time**, not read at runtime. Changing `NEXT_PUBLIC_API_URL` in the Vercel dashboard requires a redeploy (Vercel triggers one automatically on env-var change for production deploys).
+- The Render free-tier backend cold-starts in ~30 seconds. The first dashboard load after the backend has been idle 15 min will look stuck — refresh after a half-minute.
+- `vercel.json` adds `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a restrictive `Permissions-Policy`. If you embed the dashboard in an iframe (e.g. for a kiosk display), drop the X-Frame-Options line.
 
 ---
 
