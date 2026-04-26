@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Env / secrets
+.env
+.env.local
+*.db
+*.sqlite
+*.sqlite3
+_smoke.db
+
+# Uploads (user-generated content; never commit)
+uploads/*
+!uploads/.gitkeep
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Test scratch
+tests/_tmp_uploads/
