@@ -34,7 +34,7 @@ This README is heavy on **why**. The architecture decisions below were made deli
 | Curious operator with DB read access | Query for "who reported the customs office?" | **Yes** — the answer is a 64-char hex blob with no inverse function unless they also stole `PT_SALT` |
 | Operator with DB *write* access | Tamper with `integrity_hash`, `recovery_hash`, audit_ledger via raw SQL | **Partial** — ORM-level immutability listeners block ledger updates from the application layer. Raw SQL bypasses them; defense is operational (least-privilege DB roles), not architectural |
 | Filesystem attacker (modifies a stored evidence file) | Swap a damning photo for a benign one | **Yes** — re-hashing on every priority evaluation detects the change and revokes media-broadcast eligibility |
-| Brute-forcer of `/auth/recover` | Probe national IDs and mnemonics | **Partial** — failure responses are byte-identical, timing is approximately constant, attempts are audit-logged. No rate limiter (operational gap) |
+| Brute-forcer of `/auth/recover` | Probe national IDs and mnemonics | **Yes** — failure responses are byte-identical, timing is approximately constant, attempts are audit-logged, and a per-IP sliding-window limiter (5 / 15 min, default) returns 429 before the audit log fills with garbage. See [Brute-Force Safeguard](#brute-force-safeguard-rate-limiting-on-authrecover) |
 | Salt thief (stole `PT_SALT` only) | Recompute PTs from a guessed national ID | **Yes against a hash-only leak**, **no against a full secret + DB leak**. `PT_SALT` rotation is the kill switch and invalidates every existing token by design |
 | Coercive subpoena ("tell us who redeemed voucher X") | Compel the operator to identify a redeemer | **Yes** — by the time the voucher is `Used`, the link is gone. The operator cannot answer because the data does not exist |
 | Network attacker (TLS not in scope) | Sniff requests | **No** — terminate TLS at your reverse proxy, this is not an HTTPS server |
@@ -351,7 +351,44 @@ sess = SessionModel(session_token=session_token, pseudonymous_token=pt, expires_
 
 #### What this does not protect against
 
-There is no rate limiter at the application layer. A determined attacker can submit attempts as fast as the network allows, and only the audit log records it. Production deployments must put a per-IP and per-PT rate limit in front of `/auth/recover`. Additionally, with 2^248 effective mnemonic space, no realistic rate of attempts threatens a single account — but rate limiting protects against denial-of-service against the audit pipeline.
+With 2^248 effective mnemonic space, no realistic rate of attempts threatens a single account directly. The risk that rate limiting addresses is **denial-of-service against the audit pipeline** and **enumeration noise** in the operator's monitoring dashboards. See the next section.
+
+#### Brute-Force Safeguard: rate limiting on /auth/recover
+
+A per-IP **sliding-window** limiter throttles `/auth/recover` to **5 attempts per 15 minutes per IP** by default. Implementation lives in `app/services/rate_limiter.py` and is applied via the `@rate_limit(...)` decorator on the route function:
+
+```python
+recover_limiter = SlidingWindowRateLimiter(
+    max_attempts=RATE_LIMIT_RECOVER_MAX_ATTEMPTS,         # default 5
+    window_seconds=RATE_LIMIT_RECOVER_WINDOW_SECONDS,     # default 900
+)
+
+@router.post("/recover", response_model=RecoverResponse)
+@rate_limit(recover_limiter)
+def recover(payload: RecoverRequest, request: Request, db: Session = Depends(get_db)):
+    ...
+```
+
+Behavior:
+
+- The limiter keys by `request.client.host`. Each key holds a deque of monotonic timestamps for recent **allowed** hits.
+- On each call: drop entries older than `window_seconds`, count remaining; if >= `max_attempts` → return **HTTP 429** with a `Retry-After: <seconds>` header pointing at the time the oldest entry expires.
+- **Blocked attempts do not get recorded.** If they did, an attacker who keeps polling while throttled would push their unlock time forward forever — a DoS against themselves, but also against the legitimate user behind the same NAT. Counting only allowed hits gives a stable retry window.
+- Successful recoveries count toward the same quota. An attacker who phishes one valid mnemonic does not unlock unlimited follow-up recoveries from the same IP.
+- Per-route. Hitting the recover limit does not affect `/auth/register` or any other endpoint on the same IP.
+
+Tunable via env:
+
+```bash
+RATE_LIMIT_RECOVER_MAX_ATTEMPTS=5
+RATE_LIMIT_RECOVER_WINDOW_SECONDS=900
+```
+
+Limits to know:
+
+- **Per-process state.** With N replicas an attacker gets N × 5 attempts before being throttled. Promote to Redis when you scale horizontally; the decorator interface stays the same.
+- **Behind a reverse proxy, every request looks like the proxy's IP.** The limiter sees the immediate peer (`request.client.host`). Real prod must either parse `X-Forwarded-For` from a trusted proxy upstream of this app or apply the rate limit at the proxy itself (nginx `limit_req`, Cloudflare rules).
+- **No per-PT limit.** A determined attacker rotating IPs can still attempt many recoveries against one account. Add a second limiter keyed by the HMAC-of-national_id (the PT) for defense in depth.
 
 ---
 
@@ -626,7 +663,7 @@ These are deliberately open. Implementing them is straightforward — the archit
 
 | Gap | Why it matters | Mitigation |
 | --- | --- | --- |
-| No rate limiter on `/auth/recover` | A determined attacker can hammer recovery attempts | Front with a per-IP and per-PT-prefix rate limit (e.g., nginx `limit_req`) |
+| Rate limiter is per-process and per-IP only | N replicas multiply the budget; a single hostile NAT can rotate IPs | Promote to Redis when scaling; add a per-PT limiter for defense in depth |
 | No real auditor authentication | `/admin/assign` and `/admin/verify` trust the `auditor_id` in the request body | Add a separate auditor session domain, distinct from citizen sessions |
 | Schema migrations are manual | `init_db` only creates missing tables; column additions need a DB drop or Alembic | Wire Alembic when the schema stabilizes |
 | Single-replica caching | The in-process `StatsCache` doesn't share across processes | Promote to Redis or a real materialized view if traffic warrants |

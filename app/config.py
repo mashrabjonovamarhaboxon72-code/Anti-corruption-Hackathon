@@ -35,6 +35,10 @@ if not RECOVERY_SALT:
 
 SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
 
+# Brute-force safeguard for /auth/recover.
+RATE_LIMIT_RECOVER_MAX_ATTEMPTS = int(os.getenv("RATE_LIMIT_RECOVER_MAX_ATTEMPTS", "5"))
+RATE_LIMIT_RECOVER_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_RECOVER_WINDOW_SECONDS", str(15 * 60)))
+
 # /admin/demo-setup wipes the entire data plane. It must NEVER ship enabled
 # in production. Default off; flip with DEMO_MODE=1 only on demo machines.
 DEMO_MODE = os.getenv("DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}

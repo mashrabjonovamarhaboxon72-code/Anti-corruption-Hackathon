@@ -1,22 +1,35 @@
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.config import DEFAULT_RELIABILITY_INDEX, SESSION_TTL_HOURS
+from app.config import (
+    DEFAULT_RELIABILITY_INDEX,
+    RATE_LIMIT_RECOVER_MAX_ATTEMPTS,
+    RATE_LIMIT_RECOVER_WINDOW_SECONDS,
+    SESSION_TTL_HOURS,
+)
 from app.database import get_db
 from app.models.audit_ledger import AuditLedger
 from app.models.session import Session as SessionModel
 from app.models.user import AGE_TIERS, User
 from app.services.pseudonymous_token import generate_pseudonymous_token
+from app.services.rate_limiter import SlidingWindowRateLimiter, rate_limit
 from app.services.recovery import (
     MNEMONIC_WORD_COUNT,
     generate_mnemonic,
     hash_mnemonic,
     is_valid_mnemonic,
     verify_mnemonic,
+)
+
+# Module-level limiter so all worker threads share state. Tunable via env
+# (RATE_LIMIT_RECOVER_MAX_ATTEMPTS, RATE_LIMIT_RECOVER_WINDOW_SECONDS).
+recover_limiter = SlidingWindowRateLimiter(
+    max_attempts=RATE_LIMIT_RECOVER_MAX_ATTEMPTS,
+    window_seconds=RATE_LIMIT_RECOVER_WINDOW_SECONDS,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -104,13 +117,19 @@ def _audit_recovery(db: Session, *, user_id: int | None, success: bool, reason: 
 
 
 @router.post("/recover", response_model=RecoverResponse)
-def recover(payload: RecoverRequest, db: Session = Depends(get_db)):
+@rate_limit(recover_limiter)
+def recover(payload: RecoverRequest, request: Request, db: Session = Depends(get_db)):
     """Re-issue a session given national_id + the recovery mnemonic.
 
     Failure responses are intentionally generic: the API must not reveal
     whether the failure was 'no such national_id' vs 'wrong mnemonic',
     because that distinction is itself a privacy leak (it confirms or
     denies registration of any queried national_id).
+
+    Rate-limited via the rate_limit decorator above (default 5 attempts
+    per 15 minutes per IP). Exceeding the budget yields 429 with a
+    Retry-After header. Blocked attempts do not reset the window — an
+    attacker who keeps polling will not extend their lockout perpetually.
     """
     generic_failure = HTTPException(status_code=401, detail="Recovery failed.")
 
