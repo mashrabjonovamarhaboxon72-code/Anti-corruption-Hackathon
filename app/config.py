@@ -17,6 +17,14 @@ if not PT_SALT:
         "Set it to a long random secret; rotating it invalidates all pseudonymous tokens."
     )
 
+PROTECTION_ORDER_SIGNING_KEY = os.environ.get("PROTECTION_ORDER_SIGNING_KEY")
+if not PROTECTION_ORDER_SIGNING_KEY:
+    raise RuntimeError(
+        "PROTECTION_ORDER_SIGNING_KEY environment variable is required. "
+        "Use a different value than PT_SALT — key separation prevents "
+        "compromise of one secret from invalidating the other."
+    )
+
 DUPLICATE_SIMILARITY_THRESHOLD = float(os.getenv("DUPLICATE_SIMILARITY_THRESHOLD", "0.88"))
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.voucher import Voucher
+from app.services.badges import compute_badges
 from app.services.benefits_catalog import benefits_for_tier, find_benefit
 from app.services.wallet import issue_voucher, self_destruct_transaction
 
@@ -15,6 +16,7 @@ class RewardsResponse(BaseModel):
     age_tier: str
     points_total: int
     benefits: list[dict]
+    badges: list[dict]
 
 
 @router.get("/rewards", response_model=RewardsResponse)
@@ -26,6 +28,7 @@ def list_rewards(pseudonymous_token: str, db: Session = Depends(get_db)):
         age_tier=user.age_tier,
         points_total=user.points_total,
         benefits=benefits_for_tier(user.age_tier),
+        badges=compute_badges(db, user),
     )
 
 

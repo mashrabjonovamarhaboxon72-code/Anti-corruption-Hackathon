@@ -24,6 +24,7 @@ def init_db():
         assignment,
         audit_ledger,
         evidence,
+        protection_order,
         report,
         user,
         voucher,

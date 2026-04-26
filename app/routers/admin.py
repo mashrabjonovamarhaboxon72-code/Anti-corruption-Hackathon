@@ -10,6 +10,7 @@ from app.models.user import User
 from app.services.coi import evaluate_coi
 from app.services.evidence_integrity import verify_evidence_integrity
 from app.services.priority import evaluate_priority
+from app.services.protection_order import maybe_issue as maybe_issue_protection_order
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -85,11 +86,18 @@ class VerifyRequest(BaseModel):
     verdict: str = Field(..., description="Verified | Malicious")
 
 
+class ProtectionOrderSummary(BaseModel):
+    order_id: str
+    payload: dict
+    signature: str
+
+
 class VerifyResponse(BaseModel):
     report_id: int
     verification_status: str
     is_media_priority: bool
     trust_score: float
+    protection_order: ProtectionOrderSummary | None = None
 
 
 @router.post("/verify", response_model=VerifyResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -127,11 +135,30 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(report)
 
+    issued = None
+    if reporter is not None:
+        issued = maybe_issue_protection_order(
+            db,
+            user=reporter,
+            report=report,
+            auditor_id=payload.auditor_id,
+            verdict=payload.verdict,
+        )
+
     return VerifyResponse(
         report_id=report.id,
         verification_status=payload.verdict,
         is_media_priority=report.is_media_priority,
         trust_score=report.trust_score,
+        protection_order=(
+            ProtectionOrderSummary(
+                order_id=issued.order_id,
+                payload=issued.payload,
+                signature=issued.signature,
+            )
+            if issued is not None
+            else None
+        ),
     )
 
 
