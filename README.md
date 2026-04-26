@@ -4,6 +4,15 @@ A FastAPI backend for anonymous corruption reporting, built so that the operator
 
 This README is heavy on **why**. The architecture decisions below were made deliberately, often against easier alternatives, because the threat model includes both casual data leaks and motivated insiders.
 
+## Two anti-corruption subsystems in one repo
+
+| Subsystem | Lives at | What it does | Stack |
+|---|---|---|---|
+| **Integrity Shield** *(this README)* | [`app/`](./app) + [`web/`](./web) | Citizens report corruption anonymously; auditors verify; rewards self-destruct after redemption. The reporter pipeline. | FastAPI · SQLAlchemy · Postgres · Next.js · Tailwind · framer-motion |
+| **Conflict-of-Interest Detector** | [`conflict-detector/`](./conflict-detector) | Scrapes [openinfo.uz](https://openinfo.uz) and detects board-level conflicts of interest between Uzbek joint-stock companies (same person on two boards, parent/child via patronymic match, etc.). The investigator pipeline. | Next.js · Cheerio · TypeScript |
+
+The two attack corruption from opposite ends. See [`conflict-detector/README.md`](./conflict-detector/README.md) for that subsystem's own docs.
+
 ---
 
 ## Table of contents
