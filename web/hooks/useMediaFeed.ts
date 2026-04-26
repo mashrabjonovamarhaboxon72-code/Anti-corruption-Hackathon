@@ -17,7 +17,7 @@ export interface MediaFeedResponse {
   reports: MediaFeedItem[];
 }
 
-export function useMediaFeed(limit = 20) {
+export function useMediaFeed(limit = 5) {
   return useSWR<MediaFeedResponse>(`/admin/media-feed?limit=${limit}`, fetcher, {
     refreshInterval: 30_000,
     revalidateOnFocus: false,

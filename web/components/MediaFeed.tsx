@@ -1,78 +1,108 @@
 "use client";
+import { AnimatePresence, motion } from "framer-motion";
 import { GlassCard } from "./GlassCard";
 import { useMediaFeed, type MediaFeedItem } from "@/hooks/useMediaFeed";
 import { timeAgo } from "@/lib/format";
 
-const TIER_LABEL: Record<number, string> = {
-  1: "T1",
-  2: "T2",
-  3: "T3",
-  4: "T4",
+const TIER_STYLE: Record<number, { ring: string; bg: string; text: string; label: string }> = {
+  1: { ring: "ring-zinc-500/40", bg: "bg-zinc-500/15", text: "text-zinc-200", label: "T1" },
+  2: { ring: "ring-sky-400/40", bg: "bg-sky-500/15", text: "text-sky-200", label: "T2" },
+  3: { ring: "ring-amber-400/50", bg: "bg-amber-500/15", text: "text-amber-200", label: "T3" },
+  4: { ring: "ring-rose-400/60", bg: "bg-rose-500/20", text: "text-rose-100", label: "T4" },
 };
 
-const TIER_TINT: Record<number, string> = {
-  1: "border-zinc-500/30 text-zinc-300",
-  2: "border-sky-400/30 text-sky-200",
-  3: "border-amber-400/30 text-amber-200",
-  4: "border-rose-400/30 text-rose-200",
-};
-
-function FeedRow({ item }: { item: MediaFeedItem }) {
+function TierBadge({ tier }: { tier: number }) {
+  const style = TIER_STYLE[tier] ?? TIER_STYLE[1];
   return (
-    <article className="rounded-xl border border-white/5 bg-white/[0.02] p-4 hover:bg-white/[0.05] transition-colors">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span
-            className={`px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded border ${
-              TIER_TINT[item.tier] ?? TIER_TINT[1]
-            }`}
-          >
-            {TIER_LABEL[item.tier] ?? `T${item.tier}`}
-          </span>
-          <span className="text-xs text-white/50 font-mono">
-            {item.target_department_id ?? "UNSPECIFIED"}
-          </span>
+    <span
+      className={[
+        "inline-flex items-center justify-center",
+        "min-w-[2.25rem] h-7 px-2",
+        "rounded-md font-mono font-bold text-sm tracking-tight",
+        "ring-1",
+        style.ring,
+        style.bg,
+        style.text,
+      ].join(" ")}
+    >
+      {style.label}
+    </span>
+  );
+}
+
+function VerifiedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-accent-500/15 ring-1 ring-accent-400/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-400">
+      <svg
+        viewBox="0 0 16 16"
+        className="w-3 h-3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M3 8.5l3.5 3.5L13 5" />
+      </svg>
+      Verified
+    </span>
+  );
+}
+
+function FeedRow({ item, index }: { item: MediaFeedItem; index: number }) {
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -12 }}
+      transition={{ duration: 0.35, delay: index * 0.06, ease: "easeOut" }}
+      className="rounded-xl border border-white/5 bg-white/[0.025] p-4 hover:bg-white/[0.05] transition-colors"
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <TierBadge tier={item.tier} />
+          <div className="flex flex-col">
+            <span className="text-xs font-mono text-white/70">
+              {item.target_department_id ?? "UNSPECIFIED"}
+            </span>
+            <span className="text-[10px] font-mono text-white/40">
+              trust {item.trust_score.toFixed(2)} · {timeAgo(item.created_at)}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
-          <span>trust {item.trust_score.toFixed(2)}</span>
-          <span>·</span>
-          <span>{timeAgo(item.created_at)}</span>
-        </div>
+        {item.verification_status === "Verified" && <VerifiedBadge />}
       </header>
-      <p className="mt-2 text-sm leading-relaxed text-white/85 text-pretty">
+      <p className="mt-3 text-sm leading-relaxed text-white/85 text-pretty">
         {item.text}
       </p>
-      {item.verification_status && (
-        <div className="mt-2 text-[10px] uppercase tracking-wider text-accent-400/80">
-          ✓ {item.verification_status}
-        </div>
-      )}
-    </article>
+    </motion.article>
   );
 }
 
 export function MediaFeed() {
-  const { data, error, isLoading } = useMediaFeed(20);
+  const { data, error, isLoading } = useMediaFeed(5);
 
   return (
     <GlassCard className="p-6 lg:p-7 h-full flex flex-col">
       <div className="flex items-baseline justify-between mb-4">
         <div>
           <div className="text-xs uppercase tracking-[0.18em] text-white/50">
-            High-Impact Feed
+            Transparency Feed
           </div>
           <div className="mt-1 text-sm text-white/60">
-            Tier 3+ reports · trust score above 0.9
+            Latest 5 high-impact reports · Tier 3+ · trust above 0.9
           </div>
         </div>
         {data && (
-          <div className="text-xs font-mono text-white/40">
-            {data.count} item{data.count === 1 ? "" : "s"}
+          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">
+            {data.count} live
           </div>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1 space-y-3 -mr-2">
+      <div className="flex-1 overflow-y-auto pr-1 -mr-2">
         {isLoading && !data && (
           <div className="text-sm text-white/40">Loading feed…</div>
         )}
@@ -83,13 +113,17 @@ export function MediaFeed() {
         )}
         {data && data.reports.length === 0 && (
           <div className="rounded-xl border border-dashed border-white/10 p-6 text-sm text-white/50 text-center">
-            No high-impact reports yet. Verified Tier 3/4 reports with high trust
-            land here for transparency broadcasts.
+            No high-impact reports yet. Verified Tier&nbsp;3/4 reports with high
+            trust land here for transparency broadcasts.
           </div>
         )}
-        {data?.reports.map((item) => (
-          <FeedRow key={item.report_id} item={item} />
-        ))}
+        <div className="space-y-3">
+          <AnimatePresence initial={false}>
+            {data?.reports.slice(0, 5).map((item, i) => (
+              <FeedRow key={item.report_id} item={item} index={i} />
+            ))}
+          </AnimatePresence>
+        </div>
       </div>
     </GlassCard>
   );
