@@ -20,6 +20,12 @@ def get_db():
 
 
 def init_db():
-    from app.models import audit_ledger, report, user  # noqa: F401
+    from app.models import (  # noqa: F401
+        assignment,
+        audit_ledger,
+        report,
+        user,
+        voucher,
+    )
 
     Base.metadata.create_all(bind=engine)

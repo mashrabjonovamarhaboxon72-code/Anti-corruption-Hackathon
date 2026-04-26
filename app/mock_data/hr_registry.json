@@ -1,0 +1,22 @@
+{
+  "AUD-001": {
+    "full_name": "Alisher Karimov",
+    "department_id": "DEPT-CUSTOMS",
+    "named_relatives": ["Dilshod Karimov", "Nigora Karimova"]
+  },
+  "AUD-002": {
+    "full_name": "Madina Yusupova",
+    "department_id": "DEPT-TRAFFIC-POLICE",
+    "named_relatives": ["Bobur Yusupov"]
+  },
+  "AUD-003": {
+    "full_name": "Sherzod Tashkentov",
+    "department_id": "DEPT-TAX",
+    "named_relatives": []
+  },
+  "AUD-004": {
+    "full_name": "Gulnora Saidova",
+    "department_id": "DEPT-EDUCATION",
+    "named_relatives": ["Rustam Saidov"]
+  }
+}

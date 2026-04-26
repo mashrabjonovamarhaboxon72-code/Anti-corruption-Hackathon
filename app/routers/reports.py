@@ -16,6 +16,7 @@ class ReportRequest(BaseModel):
     text: str = Field(..., min_length=10)
     tier: int = Field(..., ge=1, le=4)
     evidence_path: str | None = None
+    target_department_id: str | None = Field(None, description="Department being reported (for COI checks).")
 
 
 class ReportResponse(BaseModel):
@@ -48,6 +49,7 @@ def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
         duplicate_of=dup.matched_report_id,
         similarity_score=dup.similarity,
         evidence_path=payload.evidence_path,
+        target_department_id=payload.target_department_id,
     )
     db.add(report)
     db.commit()
