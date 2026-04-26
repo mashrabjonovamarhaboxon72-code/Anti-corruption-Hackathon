@@ -30,13 +30,14 @@ def test_exif_is_stripped():
     src = Image.open(BytesIO(raw))
     assert dict(src.getexif()), "fixture must contain EXIF or the test is meaningless"
 
-    out_path = sanitize_and_store(raw, "evil.jpg")
-    cleaned = Image.open(out_path)
+    sanitized = sanitize_and_store(raw, "evil.jpg")
+    cleaned = Image.open(sanitized.path)
 
     assert dict(cleaned.getexif()) == {}, "EXIF survived sanitization"
     assert cleaned.size == (32, 32)
     assert cleaned.getpixel((0, 0)) != (0, 0, 0)
-    out_path.unlink()
+    assert len(sanitized.sha256_hash) == 64
+    sanitized.path.unlink()
 
 
 if __name__ == "__main__":

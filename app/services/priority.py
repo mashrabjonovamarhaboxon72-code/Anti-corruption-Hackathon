@@ -7,7 +7,8 @@ signals available at submission time:
 
   0.50 × (reporter RI / 1000)   reporter reputation (baseline up to 0.50)
 + 0.30 × (1 − similarity)       novelty — penalizes near-duplicates
-+ 0.10 if evidence_path         concrete attachment improves auditability
++ 0.10 if evidence_verified     attached file's current hash matches the
+                                integrity_hash captured at sanitization
 + 0.10 if target_department_id  clear accountability target
 
 A high-RI reporter (RI≈1000) with no duplicate match, an attached evidence
@@ -36,13 +37,13 @@ def compute_trust_score(
     *,
     reliability_index: int,
     similarity: float | None,
-    has_evidence: bool,
+    evidence_verified: bool,
     has_target_department: bool,
 ) -> float:
     ri_component = 0.5 * max(0, min(1000, reliability_index)) / 1000
     sim = 0.0 if similarity is None else max(0.0, min(1.0, similarity))
     novelty_component = 0.3 * (1.0 - sim)
-    evidence_component = 0.1 if has_evidence else 0.0
+    evidence_component = 0.1 if evidence_verified else 0.0
     target_component = 0.1 if has_target_department else 0.0
     score = ri_component + novelty_component + evidence_component + target_component
     return round(max(0.0, min(1.0, score)), 4)
@@ -53,14 +54,14 @@ def evaluate_priority(
     tier: int,
     reliability_index: int,
     similarity: float | None,
-    has_evidence: bool,
+    evidence_verified: bool,
     has_target_department: bool,
     verification_status: str | None = None,
 ) -> PriorityDecision:
     score = compute_trust_score(
         reliability_index=reliability_index,
         similarity=similarity,
-        has_evidence=has_evidence,
+        evidence_verified=evidence_verified,
         has_target_department=has_target_department,
     )
 

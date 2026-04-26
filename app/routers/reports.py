@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.report import Report
 from app.models.user import User
 from app.services.duplicate_check import check_for_duplicate
+from app.services.evidence_integrity import verify_evidence_integrity
 from app.services.priority import evaluate_priority
 from app.services.scoring import CORRUPTION_TIERS, award_points
 
@@ -43,11 +44,13 @@ def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
 
     dup = check_for_duplicate(db, payload.text)
 
+    evidence_verified = verify_evidence_integrity(db, payload.evidence_path)
+
     priority = evaluate_priority(
         tier=payload.tier,
         reliability_index=user.reliability_index,
         similarity=dup.similarity,
-        has_evidence=bool(payload.evidence_path),
+        evidence_verified=evidence_verified,
         has_target_department=bool(payload.target_department_id),
     )
 

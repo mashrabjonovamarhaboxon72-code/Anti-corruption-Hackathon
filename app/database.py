@@ -23,6 +23,7 @@ def init_db():
     from app.models import (  # noqa: F401
         assignment,
         audit_ledger,
+        evidence,
         report,
         user,
         voucher,

@@ -8,6 +8,7 @@ from app.models.audit_ledger import AuditLedger
 from app.models.report import Report
 from app.models.user import User
 from app.services.coi import evaluate_coi
+from app.services.evidence_integrity import verify_evidence_integrity
 from app.services.priority import evaluate_priority
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -116,7 +117,7 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
         tier=report.tier,
         reliability_index=reporter.reliability_index if reporter else 0,
         similarity=report.similarity_score,
-        has_evidence=bool(report.evidence_path),
+        evidence_verified=verify_evidence_integrity(db, report.evidence_path),
         has_target_department=bool(report.target_department_id),
         verification_status=payload.verdict,
     )
