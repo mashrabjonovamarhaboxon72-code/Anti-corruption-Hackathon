@@ -18,7 +18,11 @@ database.SessionLocal = sessionmaker(bind=test_engine, autoflush=False, autocomm
 from app.database import Base, SessionLocal  # noqa: E402
 from app.models.report import Report  # noqa: E402
 from app.models.user import User  # noqa: E402
-from app.services.public_stats import StatsCache, compute_stats  # noqa: E402
+from app.services.public_stats import (  # noqa: E402
+    TIER_FISCAL_IMPACT_UZS,
+    StatsCache,
+    compute_stats,
+)
 
 
 def setup_module(module):
@@ -162,3 +166,80 @@ def test_cache_invalidate_forces_recompute():
     b = cache.get(db)
     db.close()
     assert a is not b
+
+
+# ---- civic_roi_summary ----
+
+
+def test_civic_roi_zero_state_emits_all_four_tiers():
+    """An empty system should still expose every tier row so the dashboard
+    can render a complete table on day one."""
+    db = SessionLocal()
+    s = compute_stats(db); db.close()
+
+    roi = s.civic_roi_summary
+    assert roi.currency == "UZS"
+    assert roi.total_estimated_funds_protected == 0
+    assert [t.tier for t in roi.by_tier] == [1, 2, 3, 4]
+    for t in roi.by_tier:
+        assert t.verified_report_count == 0
+        assert t.subtotal_uzs == 0
+
+
+def test_civic_roi_sums_per_tier_and_only_counts_verified():
+    u = _user()
+    # Verified contributors
+    _report(u, tier=4, verdict="Verified")  # +100M
+    _report(u, tier=4, verdict="Verified")  # +100M
+    _report(u, tier=3, verdict="Verified")  # + 50M
+    _report(u, tier=1, verdict="Verified")  # +  2M
+    # Should NOT be counted
+    _report(u, tier=4, verdict="Malicious")
+    _report(u, tier=3, verdict=None)
+    _report(u, tier=2, verdict="Malicious")
+
+    db = SessionLocal()
+    s = compute_stats(db); db.close()
+    roi = s.civic_roi_summary
+
+    assert roi.total_estimated_funds_protected == 252_000_000
+    by_tier = {t.tier: t for t in roi.by_tier}
+    assert by_tier[4].verified_report_count == 2
+    assert by_tier[4].subtotal_uzs == 200_000_000
+    assert by_tier[3].verified_report_count == 1
+    assert by_tier[3].subtotal_uzs == 50_000_000
+    assert by_tier[2].verified_report_count == 0
+    assert by_tier[2].subtotal_uzs == 0
+    assert by_tier[1].verified_report_count == 1
+    assert by_tier[1].subtotal_uzs == 2_000_000
+
+
+def test_civic_roi_table_matches_constants():
+    """The conversion table is echoed in the response so the frontend can
+    show users how subtotals were derived. It must equal the constants."""
+    db = SessionLocal()
+    s = compute_stats(db); db.close()
+    assert s.civic_roi_summary.tier_impact_table == TIER_FISCAL_IMPACT_UZS
+
+
+def test_tier_4_estimated_at_least_100m():
+    """The user-facing claim is 'Tier 4 = 100,000,000+ UZS'; if anyone
+    tunes this constant down, the assertion catches it before the demo."""
+    assert TIER_FISCAL_IMPACT_UZS[4] >= 100_000_000
+
+
+def test_civic_roi_serializes_in_payload():
+    u = _user()
+    _report(u, tier=4, verdict="Verified")
+    db = SessionLocal()
+    payload = compute_stats(db).to_dict(); db.close()
+
+    assert "civic_roi_summary" in payload
+    roi = payload["civic_roi_summary"]
+    assert roi["currency"] == "UZS"
+    assert roi["total_estimated_funds_protected"] == 100_000_000
+    assert isinstance(roi["by_tier"], list) and len(roi["by_tier"]) == 4
+    # No PII smuggled in via the new section
+    flat = repr(roi)
+    for forbidden in ("pseudonymous_token", "user_id", "national_id"):
+        assert forbidden not in flat

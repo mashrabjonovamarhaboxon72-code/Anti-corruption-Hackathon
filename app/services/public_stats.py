@@ -34,6 +34,21 @@ from app.services.badges import (
 )
 
 
+# Estimated fiscal impact per Verified report tier, in Uzbekistani so'm (UZS).
+# These are *order-of-magnitude* estimates derived from public corruption-case
+# reporting; they're shown in the dashboard as "Estimated Public Funds
+# Protected" and should be treated as illustrative, not auditable. Tune the
+# constants here, not in the consumer — the dashboard, the demo seed, and any
+# downstream report all read from this single source of truth.
+TIER_FISCAL_IMPACT_UZS: dict[int, int] = {
+    1: 2_000_000,        # petty bribe at a window/desk
+    2: 15_000_000,       # mid-level extortion or fee fabrication
+    3: 50_000_000,       # contract-skimming, admissions fraud, etc.
+    4: 100_000_000,      # high-impact: senior official, organized scheme
+}
+FISCAL_CURRENCY = "UZS"
+
+
 @dataclass
 class DepartmentBreakdown:
     department_id: str
@@ -48,10 +63,33 @@ class RecentBadge:
 
 
 @dataclass
+class TierImpact:
+    tier: int
+    verified_report_count: int
+    impact_per_report_uzs: int
+    subtotal_uzs: int
+
+
+@dataclass
+class CivicRoiSummary:
+    """Aggregate fiscal-impact estimate for the public dashboard.
+
+    Counts Verified reports only — accusations that haven't passed an
+    auditor's verdict don't claim "funds protected" status.
+    """
+
+    currency: str
+    total_estimated_funds_protected: int
+    by_tier: list[TierImpact]
+    tier_impact_table: dict[int, int]  # echoed so the frontend can show the conversion table
+
+
+@dataclass
 class PublicStats:
     total_verified_reports: int
     reports_by_department: list[DepartmentBreakdown]
     total_civic_impact: int
+    civic_roi_summary: CivicRoiSummary
     recent_corruption_fighter_badges: list[RecentBadge]
     generated_at: str
     cache_ttl_seconds: int = field(default=PUBLIC_STATS_TTL_SECONDS)
@@ -76,6 +114,46 @@ def _civic_impact(db: Session) -> int:
         .filter(Report.verification_status == "Verified")
         .scalar()
         or 0
+    )
+
+
+def _civic_roi(db: Session) -> CivicRoiSummary:
+    """Group Verified reports by tier, multiply by the tier's fiscal-impact
+    estimate, sum into a grand total. Tiers with zero verified reports are
+    still emitted in `by_tier` so the dashboard can show all four rows even
+    on a quiet day — better UX than a row appearing/disappearing."""
+    rows = (
+        db.query(Report.tier, func.count(Report.id))
+        .filter(Report.verification_status == "Verified")
+        .group_by(Report.tier)
+        .all()
+    )
+    counts_by_tier: dict[int, int] = {tier: 0 for tier in TIER_FISCAL_IMPACT_UZS}
+    for tier, count in rows:
+        if tier in counts_by_tier:
+            counts_by_tier[tier] = count
+
+    by_tier: list[TierImpact] = []
+    grand_total = 0
+    for tier in sorted(TIER_FISCAL_IMPACT_UZS):
+        impact = TIER_FISCAL_IMPACT_UZS[tier]
+        count = counts_by_tier[tier]
+        subtotal = impact * count
+        grand_total += subtotal
+        by_tier.append(
+            TierImpact(
+                tier=tier,
+                verified_report_count=count,
+                impact_per_report_uzs=impact,
+                subtotal_uzs=subtotal,
+            )
+        )
+
+    return CivicRoiSummary(
+        currency=FISCAL_CURRENCY,
+        total_estimated_funds_protected=grand_total,
+        by_tier=by_tier,
+        tier_impact_table=dict(TIER_FISCAL_IMPACT_UZS),
     )
 
 
@@ -137,6 +215,7 @@ def compute_stats(db: Session, *, recent_limit: int = PUBLIC_STATS_RECENT_BADGES
         total_verified_reports=_verified_count(db),
         reports_by_department=_by_department(db),
         total_civic_impact=int(_civic_impact(db)),
+        civic_roi_summary=_civic_roi(db),
         recent_corruption_fighter_badges=_recent_badges(db, limit=recent_limit),
         generated_at=datetime.utcnow().isoformat() + "Z",
         cache_ttl_seconds=PUBLIC_STATS_TTL_SECONDS,
