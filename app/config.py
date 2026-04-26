@@ -72,6 +72,15 @@ DUPLICATE_SIMILARITY_THRESHOLD = float(os.getenv("DUPLICATE_SIMILARITY_THRESHOLD
 # reports (or run the two models side-by-side during a migration window).
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
+# Fail-safe for memory-constrained deploys (e.g. Render's 512 MB free tier).
+# When STUB_AI=1, app.services.embeddings.embed() returns a deterministic
+# SHA-based vector instead of loading sentence-transformers (~250 MB torch +
+# ~80 MB model weights). The duplicate-check service still runs end-to-end,
+# but only catches EXACT text matches — it can no longer detect semantic
+# near-duplicates ("bribe at customs" vs "officer asked for cash"). For demo
+# environments where memory headroom matters more than ML quality.
+STUB_AI = os.getenv("STUB_AI", "").strip().lower() in {"1", "true", "yes", "on"}
+
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -25,7 +25,10 @@ services:
     region: oregon
     rootDir: .
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # --workers 1 is explicit so a future operator doesn't accidentally bump
+    # uvicorn's worker count and OOM the 512 MB free tier — each extra worker
+    # is another full process with its own torch/model in memory.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -56,6 +59,14 @@ services:
       # ── Smaller, cheaper embedder; matches the new default in config.py.
       - key: EMBEDDING_MODEL
         value: sentence-transformers/all-MiniLM-L6-v2
+
+      # ── Stub embedder fail-safe. Set "1" to skip loading sentence-
+      # transformers entirely (saves ~330 MB RAM). embed() falls back to a
+      # deterministic SHA-based vector — exact-duplicate detection still
+      # works, semantic near-duplicate detection does not. Recommended
+      # default for the 512 MB free tier; flip to "0" if you upgrade.
+      - key: STUB_AI
+        value: "1"
 
       # ── Set in the dashboard AFTER the frontend is deployed on Vercel.
       # Use the deployed Vercel URL (e.g. https://integrity-shield.vercel.app).
