@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #06070a;
+  color: #e8ecf3;
+  min-height: 100vh;
+}
+
+body {
+  background-image:
+    radial-gradient(1200px 600px at 50% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, rgba(56, 189, 248, 0.06), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* Subtle scrollbar that doesn't fight the dark theme. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+}
