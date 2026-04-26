@@ -6,7 +6,7 @@
 #   2. In Render → New → Blueprint → connect the integrity-shield repo.
 #   3. Render reads this file, provisions the database + service, and
 #      auto-generates the three secret env vars on first deploy.
-#   4. Set CORS_ALLOW_ORIGINS in the dashboard once your frontend URL exists.
+#   4. Set FRONTEND_URL in the dashboard once your Vercel URL exists.
 #
 # Plan notes:
 #   - The free tier (`plan: free`) has 512 MB RAM — enough for FastAPI +
@@ -24,7 +24,7 @@ services:
     plan: free
     region: oregon
     rootDir: .
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
@@ -57,10 +57,11 @@ services:
       - key: EMBEDDING_MODEL
         value: sentence-transformers/all-MiniLM-L6-v2
 
-      # ── Set in the dashboard AFTER the frontend is deployed.
-      # Use the deployed frontend's exact origin (e.g. https://app.example.com).
+      # ── Set in the dashboard AFTER the frontend is deployed on Vercel.
+      # Use the deployed Vercel URL (e.g. https://integrity-shield.vercel.app).
+      # Comma-separated for multiple (e.g. preview + production deploys).
       # Never use "*" — wildcard origins disable Authorization headers in browsers.
-      - key: CORS_ALLOW_ORIGINS
+      - key: FRONTEND_URL
         sync: false
 
       # ── Default off in production. Flip in the dashboard only on a

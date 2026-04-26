@@ -113,7 +113,7 @@ return SanitizedImage(
     source: "app/services/duplicate_check.py",
     language: "python",
     caption:
-      "Vector embedding via sentence-transformers/all-mpnet-base-v2. Every existing report's embedding is loaded once; new reports are scored against all of them via cosine similarity. Above the threshold (default 0.88) the report is flagged Potential Duplicate.",
+      "Vector embedding via sentence-transformers/all-MiniLM-L6-v2 (~80 MB, fits the 512 MB free-tier RAM budget). Every existing report's embedding is loaded once; new reports are scored against all of them via cosine similarity. Above the threshold (default 0.88) the report is flagged Potential Duplicate.",
     code: `def check_for_duplicate(db: Session, text: str) -> DuplicateCheckResult:
     new_vec = embed(text)
 

@@ -1,10 +1,10 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import background
-from app.config import CORS_ALLOW_ORIGINS
 from app.database import init_db
 from app.routers import admin, auth, demo, public, reports, upload, wallet
 
@@ -36,9 +36,17 @@ app = FastAPI(
 )
 
 
+# Single source of truth for the deployed frontend's origin. Set this to the
+# Vercel URL (e.g. https://integrity-shield.vercel.app) once the frontend is
+# live; defaults to http://localhost:3000 for local dev. A comma-separated
+# value is accepted so an operator can authorize multiple origins (e.g. a
+# preview deploy + production) without redeploying the backend.
+_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+ALLOWED_ORIGINS = [o.strip() for o in _frontend_url.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -49,12 +49,9 @@ SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
 RATE_LIMIT_RECOVER_MAX_ATTEMPTS = int(os.getenv("RATE_LIMIT_RECOVER_MAX_ATTEMPTS", "5"))
 RATE_LIMIT_RECOVER_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_RECOVER_WINDOW_SECONDS", str(15 * 60)))
 
-# Comma-separated origins allowed by CORS (e.g., "http://localhost:3000,https://dash.example").
-# Use "*" only in dev — Authorization headers won't be honored against a wildcard origin
-# from a real browser. The default opens localhost:3000 for the Next.js dev server.
-CORS_ALLOW_ORIGINS = [
-    o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",") if o.strip()
-]
+# NOTE: CORS allow_origins is read directly from FRONTEND_URL in app/main.py
+# so the multi-cloud deploy story is "set FRONTEND_URL on Render to your
+# Vercel URL, done." See app/main.py for the single-source-of-truth read.
 
 # /admin/demo-setup wipes the entire data plane. It must NEVER ship enabled
 # in production. Default off; flip with DEMO_MODE=1 only on demo machines.
