@@ -178,9 +178,34 @@ def test_seed_is_idempotent_when_called_after_reset():
 def test_endpoint_refuses_when_demo_mode_off():
     config.DEMO_MODE = False
     with TestClient(app) as c:
-        r = c.post("/admin/demo-setup")
-    assert r.status_code == 403
-    assert "DEMO_MODE" in r.json()["detail"]
+        # Both methods rejected the same way when DEMO_MODE is off.
+        r_post = c.post("/admin/demo-setup")
+        r_get = c.get("/admin/demo-setup")
+    for r in (r_post, r_get):
+        assert r.status_code == 403
+        assert "DEMO_MODE" in r.json()["detail"]
+
+
+def test_endpoint_accepts_get_in_addition_to_post(tmp_path, monkeypatch):
+    """A presenter should be able to fire demo-setup from the address bar
+    in the middle of a demo. GET and POST must yield the same fresh state."""
+    from app import config as cfg
+    from app.services import image_sanitizer
+
+    monkeypatch.setattr(cfg, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(image_sanitizer, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr("app.services.embeddings.embed", _fake_embedder)
+
+    config.DEMO_MODE = True
+    with TestClient(app) as c:
+        r = c.get("/admin/demo-setup")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["demo_state"]["whistleblower"]["reliability_index"] == 950
+    assert len(body["demo_state"]["baseline_reports"]) == 3
+    # Cache-Control must forbid the back-button from re-firing the wipe
+    # via a cached "ok" response.
+    assert "no-store" in r.headers.get("cache-control", "").lower()
 
 
 def test_endpoint_runs_when_demo_mode_on(tmp_path, monkeypatch):
