@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -23,5 +23,8 @@ class Report(Base):
 
     verification_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     ri_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    trust_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    is_media_priority: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

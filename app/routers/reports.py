@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.report import Report
 from app.models.user import User
 from app.services.duplicate_check import check_for_duplicate
+from app.services.priority import evaluate_priority
 from app.services.scoring import CORRUPTION_TIERS, award_points
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -27,6 +28,8 @@ class ReportResponse(BaseModel):
     awarded_points: int
     ri_multiplier: float
     user_points_total: int
+    trust_score: float
+    is_media_priority: bool
 
 
 @router.post("", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
@@ -40,6 +43,17 @@ def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
 
     dup = check_for_duplicate(db, payload.text)
 
+    priority = evaluate_priority(
+        tier=payload.tier,
+        reliability_index=user.reliability_index,
+        similarity=dup.similarity,
+        has_evidence=bool(payload.evidence_path),
+        has_target_department=bool(payload.target_department_id),
+    )
+
+    # Duplicates are never broadcast even if they would otherwise qualify.
+    is_priority = priority.is_media_priority and not dup.is_duplicate
+
     report = Report(
         user_id=user.id,
         text=payload.text,
@@ -50,6 +64,8 @@ def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
         similarity_score=dup.similarity,
         evidence_path=payload.evidence_path,
         target_department_id=payload.target_department_id,
+        trust_score=priority.trust_score,
+        is_media_priority=is_priority,
     )
     db.add(report)
     db.commit()
@@ -71,4 +87,6 @@ def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
         awarded_points=awarded,
         ri_multiplier=multiplier,
         user_points_total=user.points_total,
+        trust_score=report.trust_score,
+        is_media_priority=report.is_media_priority,
     )

@@ -6,7 +6,9 @@ from app.database import get_db
 from app.models.assignment import Assignment
 from app.models.audit_ledger import AuditLedger
 from app.models.report import Report
+from app.models.user import User
 from app.services.coi import evaluate_coi
+from app.services.priority import evaluate_priority
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -85,6 +87,8 @@ class VerifyRequest(BaseModel):
 class VerifyResponse(BaseModel):
     report_id: int
     verification_status: str
+    is_media_priority: bool
+    trust_score: float
 
 
 @router.post("/verify", response_model=VerifyResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -106,6 +110,75 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
 
     report.verification_status = payload.verdict
     report.ri_applied = False
-    db.commit()
 
-    return VerifyResponse(report_id=report.id, verification_status=payload.verdict)
+    reporter = db.get(User, report.user_id)
+    priority = evaluate_priority(
+        tier=report.tier,
+        reliability_index=reporter.reliability_index if reporter else 0,
+        similarity=report.similarity_score,
+        has_evidence=bool(report.evidence_path),
+        has_target_department=bool(report.target_department_id),
+        verification_status=payload.verdict,
+    )
+    report.trust_score = priority.trust_score
+    report.is_media_priority = priority.is_media_priority and report.status == "Accepted"
+
+    db.commit()
+    db.refresh(report)
+
+    return VerifyResponse(
+        report_id=report.id,
+        verification_status=payload.verdict,
+        is_media_priority=report.is_media_priority,
+        trust_score=report.trust_score,
+    )
+
+
+class MediaFeedItem(BaseModel):
+    report_id: int
+    tier: int
+    trust_score: float
+    target_department_id: str | None
+    verification_status: str | None
+    text: str
+    created_at: str
+
+
+class MediaFeedResponse(BaseModel):
+    count: int
+    reports: list[MediaFeedItem]
+
+
+@router.get("/media-feed", response_model=MediaFeedResponse)
+def media_feed(limit: int = 50, db: Session = Depends(get_db)):
+    """Public-transparency feed.
+
+    Lists only reports flagged is_media_priority=True (Tier 3/4 with
+    trust_score > 0.9, never duplicates, never Malicious-marked). The
+    reporter's pseudonymous_token is deliberately excluded — broadcasts
+    must not link content back to a citizen even via PT.
+    """
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+
+    rows = (
+        db.query(Report)
+        .filter(Report.is_media_priority.is_(True))
+        .order_by(Report.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    items = [
+        MediaFeedItem(
+            report_id=r.id,
+            tier=r.tier,
+            trust_score=r.trust_score,
+            target_department_id=r.target_department_id,
+            verification_status=r.verification_status,
+            text=r.text,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+    return MediaFeedResponse(count=len(items), reports=items)
