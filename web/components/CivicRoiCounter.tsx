@@ -2,21 +2,27 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { GlassCard } from "./GlassCard";
+import { useBroadcast } from "@/contexts/BroadcastContext";
 import { usePublicStats } from "@/hooks/usePublicStats";
 import { formatCount, formatUZS } from "@/lib/format";
 
 /**
  * Rolling counter via framer-motion's MotionValue. We tween a numeric
  * MotionValue and project it through useTransform into a formatted string,
- * then render with a non-React-state motion.span — the DOM updates run on
+ * then render with a non-React-state motion.span — DOM updates run on
  * framer's animation loop without re-rendering the whole tree.
- *
- * `animate(motionValue, target, ...)` returns an Animation handle that we
- * cancel on cleanup so successive SWR refreshes don't stack tweens.
  */
-function RollingNumber({ value, durationSeconds = 1.8 }: { value: number; durationSeconds?: number }) {
+function RollingNumber({
+  value,
+  durationSeconds = 1.8,
+}: {
+  value: number;
+  durationSeconds?: number;
+}) {
   const motionValue = useMotionValue(0);
-  const formatted = useTransform(motionValue, (latest) => formatUZS(Math.round(latest)));
+  const formatted = useTransform(motionValue, (latest) =>
+    formatUZS(Math.round(latest)),
+  );
 
   useEffect(() => {
     const controls = animate(motionValue, value, {
@@ -31,9 +37,9 @@ function RollingNumber({ value, durationSeconds = 1.8 }: { value: number; durati
 
 export function CivicRoiCounter() {
   const { data, isLoading, error } = usePublicStats();
+  const { isBroadcast } = useBroadcast();
   const target = data?.civic_roi_summary.total_estimated_funds_protected ?? 0;
 
-  // Pulse the headline for ~600ms whenever the value changes (subtle glow).
   const [pulseKey, setPulseKey] = useState(0);
   const lastValueRef = useRef(target);
   useEffect(() => {
@@ -42,6 +48,10 @@ export function CivicRoiCounter() {
       setPulseKey((k) => k + 1);
     }
   }, [target]);
+
+  if (isBroadcast) {
+    return <BroadcastVariant target={target} pulseKey={pulseKey} error={error} />;
+  }
 
   return (
     <GlassCard className="p-8 lg:p-10 h-full flex flex-col justify-between">
@@ -107,13 +117,73 @@ export function CivicRoiCounter() {
       </div>
 
       {isLoading && !data && (
-        <div className="mt-4 text-xs text-white/40">Loading from /public/stats…</div>
+        <div className="mt-4 text-xs text-white/40">
+          Loading from /public/stats…
+        </div>
       )}
       {error && (
         <div className="mt-4 text-xs text-red-300/80">
-          Couldn&apos;t reach {process.env.NEXT_PUBLIC_API_URL ?? "the API"}. Is the FastAPI server running?
+          Couldn&apos;t reach {process.env.NEXT_PUBLIC_API_URL ?? "the API"}.
+          Is the FastAPI server running?
         </div>
       )}
     </GlassCard>
+  );
+}
+
+/**
+ * Broadcast variant — fills the available height/width with the headline
+ * and one supporting line. No tier-breakdown grid, no API URLs, no refresh
+ * indicators, no PT/trust telemetry. Just the number.
+ */
+function BroadcastVariant({
+  target,
+  pulseKey,
+  error,
+}: {
+  target: number;
+  pulseKey: number;
+  error: unknown;
+}) {
+  return (
+    <div className="flex-1 w-full flex flex-col items-center justify-center text-center px-6">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease: "easeOut" }}
+        className="text-xs sm:text-sm uppercase tracking-[0.5em] text-white/50"
+      >
+        Public Funds Protected
+      </motion.div>
+
+      <motion.div
+        key={pulseKey}
+        initial={{
+          opacity: 0.7,
+          filter: "drop-shadow(0 0 0 rgba(52,211,153,0))",
+        }}
+        animate={{
+          opacity: 1,
+          filter: [
+            "drop-shadow(0 0 0 rgba(52,211,153,0))",
+            "drop-shadow(0 0 60px rgba(52,211,153,0.55))",
+            "drop-shadow(0 0 0 rgba(52,211,153,0))",
+          ],
+        }}
+        transition={{ duration: 1.4, ease: "easeOut" }}
+        className="mt-6 sm:mt-10 font-mono text-[clamp(3.5rem,18vw,18rem)] leading-[0.95] tabular-nums tracking-tight bg-gradient-to-br from-white via-white to-accent-400 bg-clip-text text-transparent"
+      >
+        {error ? "—" : <RollingNumber value={target} durationSeconds={2.4} />}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8, delay: 0.5 }}
+        className="mt-6 text-base sm:text-xl tracking-[0.3em] text-white/40 uppercase"
+      >
+        UZS · Estimated Impact
+      </motion.div>
+    </div>
   );
 }

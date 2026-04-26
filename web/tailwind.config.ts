@@ -29,6 +29,20 @@ const config: Config = {
         "grid-fade":
           "radial-gradient(1200px 600px at 50% -10%, rgba(16,185,129,0.12), transparent 60%)",
       },
+      keyframes: {
+        // Vertical marquee for Broadcast Mode. Content is duplicated in the
+        // DOM; -50% completes one full cycle, producing a seamless loop.
+        "broadcast-marquee": {
+          "0%": { transform: "translateY(0)" },
+          "100%": { transform: "translateY(-50%)" },
+        },
+      },
+      animation: {
+        // Duration is set per-instance via the --marquee-duration CSS variable
+        // so longer feeds scroll proportionally slower.
+        "broadcast-marquee":
+          "broadcast-marquee var(--marquee-duration, 60s) linear infinite",
+      },
     },
   },
   plugins: [],

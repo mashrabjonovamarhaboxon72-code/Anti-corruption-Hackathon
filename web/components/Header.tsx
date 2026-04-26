@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { API_URL } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBroadcast } from "@/contexts/BroadcastContext";
 import { AuthModal } from "./AuthModal";
 
 function PtChip({ pt }: { pt: string }) {
@@ -9,6 +10,34 @@ function PtChip({ pt }: { pt: string }) {
     <span className="font-mono text-[11px] text-white/70 px-2 py-1 rounded-md bg-white/[0.04] border border-white/10">
       ◆ {pt.slice(0, 8)}…{pt.slice(-4)}
     </span>
+  );
+}
+
+function BroadcastToggle() {
+  const { isBroadcast, toggle } = useBroadcast();
+  return (
+    <button
+      onClick={toggle}
+      title={isBroadcast ? "Exit Broadcast Mode (Esc)" : "Enter Broadcast Mode"}
+      className={[
+        "inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-colors",
+        isBroadcast
+          ? "bg-accent-500/20 text-accent-400 ring-1 ring-accent-400/40 hover:bg-accent-500/25"
+          : "bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white border border-white/10",
+      ].join(" ")}
+    >
+      <span
+        aria-hidden
+        className={[
+          "inline-block w-2 h-2 rounded-full",
+          isBroadcast ? "bg-accent-400 animate-pulse" : "bg-white/30",
+        ].join(" ")}
+      />
+      <span className="hidden sm:inline">
+        {isBroadcast ? "Broadcasting" : "Broadcast Mode"}
+      </span>
+      <span className="sm:hidden">{isBroadcast ? "ON AIR" : "BCST"}</span>
+    </button>
   );
 }
 
@@ -37,6 +66,8 @@ export function Header() {
           <span className="text-[11px] font-mono text-white/30 hidden sm:inline">
             {API_URL}
           </span>
+
+          <BroadcastToggle />
 
           {isAuthenticated && pt ? (
             <div className="flex items-center gap-2">

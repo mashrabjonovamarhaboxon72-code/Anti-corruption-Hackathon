@@ -1,10 +1,15 @@
 "use client";
+import { CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GlassCard } from "./GlassCard";
+import { useBroadcast } from "@/contexts/BroadcastContext";
 import { useMediaFeed, type MediaFeedItem } from "@/hooks/useMediaFeed";
-import { timeAgo } from "@/lib/format";
+import { tierLabel, timeAgo } from "@/lib/format";
 
-const TIER_STYLE: Record<number, { ring: string; bg: string; text: string; label: string }> = {
+const TIER_STYLE: Record<
+  number,
+  { ring: string; bg: string; text: string; label: string }
+> = {
   1: { ring: "ring-zinc-500/40", bg: "bg-zinc-500/15", text: "text-zinc-200", label: "T1" },
   2: { ring: "ring-sky-400/40", bg: "bg-sky-500/15", text: "text-sky-200", label: "T2" },
   3: { ring: "ring-amber-400/50", bg: "bg-amber-500/15", text: "text-amber-200", label: "T3" },
@@ -50,6 +55,10 @@ function VerifiedBadge() {
   );
 }
 
+/* ============================================================
+   Standard Bento variant — technical, dense, with metadata
+   ============================================================ */
+
 function FeedRow({ item, index }: { item: MediaFeedItem; index: number }) {
   return (
     <motion.article
@@ -81,8 +90,98 @@ function FeedRow({ item, index }: { item: MediaFeedItem; index: number }) {
   );
 }
 
+/* ============================================================
+   Broadcast variant — slow vertical marquee, no tech metadata
+   ============================================================ */
+
+function BroadcastCase({ item }: { item: MediaFeedItem }) {
+  // Department names without the DEPT- prefix or hyphens, title-cased.
+  const dept = (item.target_department_id ?? "Government Agency")
+    .replace(/^DEPT-/i, "")
+    .replace(/[-_]/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  return (
+    <article className="px-6 py-8 sm:px-10 sm:py-12 max-w-4xl">
+      <div className="text-xs sm:text-sm uppercase tracking-[0.4em] text-accent-400/80">
+        {tierLabel(item.tier)}
+      </div>
+      <div className="mt-3 text-2xl sm:text-3xl font-medium tracking-tight text-white/95">
+        {dept}
+      </div>
+      <p className="mt-5 text-lg sm:text-xl leading-relaxed text-white/80 text-pretty">
+        {item.text}
+      </p>
+    </article>
+  );
+}
+
+function BroadcastFeed({ reports }: { reports: MediaFeedItem[] }) {
+  // Pace: ~10s per item is comfortable for camera readability.
+  const durationSeconds = Math.max(40, reports.length * 10);
+  const style = { "--marquee-duration": `${durationSeconds}s` } as CSSProperties;
+
+  if (reports.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-white/40 text-sm uppercase tracking-[0.3em]">
+          Awaiting verified cases
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full overflow-hidden">
+      {/* Top + bottom fade-outs so items appear/disappear gracefully on camera. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-ink-950 to-transparent z-10" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink-950 to-transparent z-10" />
+
+      <div
+        className="animate-broadcast-marquee will-change-transform hover:[animation-play-state:paused]"
+        style={style}
+      >
+        {/* Duplicate the list so the -50% loop in the keyframes is seamless. */}
+        {[...reports, ...reports].map((item, i) => (
+          <BroadcastCase
+            key={`${item.report_id}-${i < reports.length ? "a" : "b"}`}
+            item={item}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================ */
+
 export function MediaFeed() {
   const { data, error, isLoading } = useMediaFeed(5);
+  const { isBroadcast } = useBroadcast();
+
+  if (isBroadcast) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="text-center mb-4">
+          <div className="text-xs uppercase tracking-[0.4em] text-white/40">
+            Recent Verified Cases
+          </div>
+        </div>
+        <div className="flex-1 min-h-0">
+          {error && (
+            <div className="text-sm text-white/50 text-center">
+              Feed temporarily unavailable.
+            </div>
+          )}
+          {data && <BroadcastFeed reports={data.reports} />}
+          {isLoading && !data && (
+            <div className="text-sm text-white/40 text-center">Loading…</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <GlassCard className="p-6 lg:p-7 h-full flex flex-col">
