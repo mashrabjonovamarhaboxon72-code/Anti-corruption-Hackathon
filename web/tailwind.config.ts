@@ -17,6 +17,9 @@ const config: Config = {
           500: "#10b981",
           600: "#059669",
         },
+        // Brand "Integrity Green" — used for active workflow steps and any
+        // explicit emphasis on the system's integrity guarantees.
+        integrity: "#00ff88",
       },
       fontFamily: {
         sans: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Inter", "sans-serif"],

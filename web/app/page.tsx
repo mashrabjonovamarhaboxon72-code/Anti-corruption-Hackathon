@@ -3,6 +3,7 @@ import { CivicRoiCounter } from "@/components/CivicRoiCounter";
 import { Header } from "@/components/Header";
 import { MediaFeed } from "@/components/MediaFeed";
 import { QuickReportPortal } from "@/components/QuickReportPortal";
+import { WorkflowSection } from "@/components/WorkflowSection";
 import { useBroadcast } from "@/contexts/BroadcastContext";
 
 export default function DashboardPage() {
@@ -35,6 +36,9 @@ function BentoView() {
           <QuickReportPortal />
         </div>
       </div>
+
+      <WorkflowSection />
+
       <footer className="mt-10 text-center text-[11px] font-mono text-white/30">
         zero-knowledge identity · hash-anchored evidence · self-destructing
         rewards
