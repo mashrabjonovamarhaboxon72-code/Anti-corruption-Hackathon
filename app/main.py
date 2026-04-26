@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app import background
 from app.database import init_db
-from app.routers import admin, auth, public, reports, upload, wallet
+from app.routers import admin, auth, demo, public, reports, upload, wallet
 
 
 @asynccontextmanager
@@ -45,3 +45,4 @@ app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(wallet.router)
 app.include_router(public.router)
+app.include_router(demo.router)
