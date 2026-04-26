@@ -572,11 +572,33 @@ cp .env.example .env             # then edit
 .venv/bin/uvicorn app.main:app --reload
 ```
 
-The first time you submit a report, the duplicate-check service lazy-loads `sentence-transformers/all-mpnet-base-v2` (~420 MB). To pre-warm:
+The first time you submit a report, the duplicate-check service lazy-loads the configured embedder (default `sentence-transformers/all-MiniLM-L6-v2`, ~80 MB). To pre-warm:
 
 ```bash
 .venv/bin/python -c "from app.services.embeddings import embed; embed('warmup')"
 ```
+
+### Deploy to Render (one-click)
+
+The repo ships with a [`render.yaml`](./render.yaml) Blueprint that provisions:
+
+- A FastAPI Web Service (Python 3.12, free plan, 512 MB RAM)
+- A managed Postgres 16 database (free plan)
+- Auto-generated values for `PT_SALT`, `RECOVERY_SALT`, and `PROTECTION_ORDER_SIGNING_KEY` (Render mints them on first deploy via `generateValue: true`)
+- Pre-wired `DATABASE_URL` from the database to the service
+- Health check at `/health`
+
+Deploy steps:
+
+1. Render → **New** → **Blueprint** → connect this repo
+2. Wait ~3 minutes for the first build (sentence-transformers model downloads on first request, not at build)
+3. After your frontend is deployed, set `CORS_ALLOW_ORIGINS` in the Render dashboard to your frontend's origin (e.g. `https://app.example.com`)
+
+Free tier caveats:
+
+- Web services spin down after 15 min idle and cold-start in ~30 s. Upgrade to `starter` ($7/mo) for always-on.
+- Free Postgres expires after 90 days and is deleted; bump to a paid plan before the deadline.
+- The default embedder fits in 512 MB RAM. Switch back to `all-mpnet-base-v2` (~420 MB) only if you upgrade to `starter` or higher.
 
 ---
 

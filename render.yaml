@@ -1,0 +1,89 @@
+# Render Blueprint for Integrity Shield
+# https://render.com/docs/blueprint-spec
+#
+# Deploy with:
+#   1. Push this file to your default branch on GitHub.
+#   2. In Render → New → Blueprint → connect the integrity-shield repo.
+#   3. Render reads this file, provisions the database + service, and
+#      auto-generates the three secret env vars on first deploy.
+#   4. Set CORS_ALLOW_ORIGINS in the dashboard once your frontend URL exists.
+#
+# Plan notes:
+#   - The free tier (`plan: free`) has 512 MB RAM — enough for FastAPI +
+#     all-MiniLM-L6-v2 (~80 MB model + ~250 MB torch + ~150 MB python =
+#     tight but functional). Free web services spin down after 15 min idle
+#     and cold-start in ~30 s. Free Postgres expires after 90 days and is
+#     deleted; bump to a paid plan before that.
+#   - For sustained demos, upgrade `plan: starter` ($7/mo) on the web
+#     service and `plan: starter` ($7/mo) on Postgres.
+
+services:
+  - type: web
+    name: integrity-shield-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+
+      # ── Three independent secrets, key separation enforced at startup.
+      # generateValue: true means Render mints a strong random value on the
+      # first deploy and never re-rolls it on subsequent deploys. To rotate:
+      # delete the var in the Render dashboard and trigger a redeploy.
+      # Override with a specific value via the dashboard if you need to
+      # recover keys from another environment.
+      - key: PT_SALT
+        generateValue: true
+      - key: RECOVERY_SALT
+        generateValue: true
+      - key: PROTECTION_ORDER_SIGNING_KEY
+        generateValue: true
+
+      # ── Postgres connection string sourced from the database below.
+      # Render hands out `postgres://`; app/config.py rewrites the prefix
+      # to `postgresql+psycopg2://` so SQLAlchemy 2.x accepts it.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: integrity-shield-db
+          property: connectionString
+
+      # ── Smaller, cheaper embedder; matches the new default in config.py.
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+
+      # ── Set in the dashboard AFTER the frontend is deployed.
+      # Use the deployed frontend's exact origin (e.g. https://app.example.com).
+      # Never use "*" — wildcard origins disable Authorization headers in browsers.
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
+
+      # ── Default off in production. Flip in the dashboard only on a
+      # sandbox blueprint that you don't mind being wiped.
+      - key: DEMO_MODE
+        value: "0"
+
+      # ── Tunables (kept here so they're visible alongside the secrets).
+      - key: PUBLIC_STATS_TTL_SECONDS
+        value: "60"
+      - key: SESSION_TTL_HOURS
+        value: "24"
+      - key: RATE_LIMIT_RECOVER_MAX_ATTEMPTS
+        value: "5"
+      - key: RATE_LIMIT_RECOVER_WINDOW_SECONDS
+        value: "900"
+
+databases:
+  - name: integrity-shield-db
+    databaseName: integrity_shield
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+    # The default `ipAllowList` (empty) restricts access to other Render
+    # services in the same account — the web service above will connect
+    # via the private fromDatabase reference and no public IP is exposed.

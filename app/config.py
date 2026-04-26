@@ -10,6 +10,16 @@ DATABASE_URL = os.getenv(
     "postgresql+psycopg2://postgres:postgres@localhost:5432/integrity_shield",
 )
 
+# Render's managed Postgres (and Heroku's, and a few others) hand out
+# connection strings prefixed `postgres://`. SQLAlchemy 2.x dropped support
+# for that scheme — only `postgresql://` and `postgresql+driver://` work.
+# Rewriting here so a vanilla `DATABASE_URL` from the platform Just Works
+# without operators having to remember the driver-prefix gotcha.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("postgres://") :]
+elif DATABASE_URL.startswith("postgresql://") and "+" not in DATABASE_URL.split("://", 1)[0]:
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len("postgresql://") :]
+
 PT_SALT = os.environ.get("PT_SALT")
 if not PT_SALT:
     raise RuntimeError(
@@ -51,7 +61,19 @@ CORS_ALLOW_ORIGINS = [
 DEMO_MODE = os.getenv("DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 DUPLICATE_SIMILARITY_THRESHOLD = float(os.getenv("DUPLICATE_SIMILARITY_THRESHOLD", "0.88"))
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+
+# Default embedder picked for cost: all-MiniLM-L6-v2 weights ~80 MB and
+# fits in 512 MB RAM (Render free tier). The larger all-mpnet-base-v2
+# (~420 MB) gives slightly better embeddings but blows the free-tier
+# memory budget. Override via env if you have the headroom.
+#
+# IMPORTANT: switching models also changes the embedding dimensionality
+# (MiniLM → 384, mpnet → 768). cosine_similarity will raise on shape
+# mismatch when comparing vectors written under different models, so a
+# model swap effectively invalidates every previously-stored Report.embedding.
+# For a fresh deploy this is a non-issue; for a live system, re-embed all
+# reports (or run the two models side-by-side during a migration window).
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
